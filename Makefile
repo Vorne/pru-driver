@@ -1,42 +1,53 @@
+REPO_ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST)))/..)
+BUILD_DIR := $(REPO_ROOT)/xl
 BUILD_TAG ?= bbb-release
+
 include $(BUILD_DIR)/makefile.d/base.mk
 
+BUILD_TAG_SET := bbb-debug bbb-release
+
+ifeq ($(filter $(BUILD_TAG),$(BUILD_TAG_SET)),)
+    $(error Unknown BUILD_TAG "$(BUILD_TAG)". Valid choices include { $(BUILD_TAG_SET) })
+endif
+
+TARGET := arm-linux-gnueabihf
+
 # Fall back to OUTPUT_DIR. Keeps this build working if there is a mismatch with the xl repo.
-LIBRARY_OUTPUT_DIR ?= $(OUTPUT_DIR)
+LIB_DIR ?= static
+LIBRARY_OUTPUT_DIR ?= $(OUTPUT_DIR)/$(LIB_DIR)
 
-ROOTDIR = .
+APP_LOADER_SUBDIR := pru_sw/app_loader
+INTERFACE_SUBDIR := $(APP_LOADER_SUBDIR)/interface
 
-INCLUDEDIR = ./pru_sw/app_loader/include
+INCLUDE_DIR := ./$(APP_LOADER_SUBDIR)/include
 
-CFLAGS += -I. -I$(INCLUDEDIR) -Wall -Wno-unused-result
+CFLAGS := -I$(INCLUDE_DIR)
+CFLAGS += -I/usr/$(TARGET)/include
+CFLAGS += -Wall
+CFLAGS += --target=$(TARGET)
 
-COMPILE.c = $(CC) $(CFLAGS) $(CPP_FLAGS) -c
-AR.c = $(AR) rc
-LINK.c = $(CC) -shared
+DRIVER_A := $(LIBRARY_OUTPUT_DIR)/libpru-driver.a
 
-DRIVER_A = $(LIBRARY_OUTPUT_DIR)/libpru-driver.a
+SOURCES := $(wildcard $(INTERFACE_SUBDIR)/*.c)
+HEADERS := $(wildcard $(INCLUDE_DIR)/*.h)
+OBJS := $(SOURCES:%.c=$(LIBRARY_OUTPUT_DIR)/%.o)
 
-SOURCES = $(wildcard pru_sw/app_loader/interface/*.c)
-
-PUBLIC_HDRS = $(wildcard $(INCLUDEDIR)/*.h)
-PRIVATE_HDRS = $(wildcard *.h)
-HEADERS = $(PUBLIC_HDRS) $(PRIVATE_HDRS)
-
-OBJS = $(SOURCES:%.c=$(LIBRARY_OUTPUT_DIR)/%.o)
-
+.PHONY: all
 all: $(DRIVER_A)
 
-$(LIBRARY_OUTPUT_DIR):
-	$(VERBOSE)mkdir -p $(LIBRARY_OUTPUT_DIR)/pru_sw/app_loader/interface
-
 $(DRIVER_A): $(OBJS)
-	@mkdir -p $(ROOTDIR)/lib
-	@echo $(AR) src $@ $(OBJS)
-	@echo OBJS: $(OBJS)
+	@echo ARCHIVE $@
 	$(AR) src $@ $(OBJS)
 
-$(OBJS): $(LIBRARY_OUTPUT_DIR)/%.o: %.c $(HEADERS) | $(LIBRARY_OUTPUT_DIR)
-	$(CC) $(CFLAGS) $(PROFILE_FLAGS) -c $< -o $@
+$(OBJS): $(LIBRARY_OUTPUT_DIR)/%.o: %.c $(HEADERS) | $(LIBRARY_OUTPUT_DIR)/$(INTERFACE_SUBDIR)
+	@echo COMPILE $@
+	$(CC) $(CFLAGS) -c $< -o $@
 
+$(LIBRARY_OUTPUT_DIR)/$(INTERFACE_SUBDIR):
+	@echo CREATE $@
+	mkdir -p $@
+
+.PHONY: clean
 clean:
-	-rm -rf *~ ./lib/* $(LIBRARY_OUTPUT_DIR)
+	@echo DELETE $(OUTPUT_DIR)
+	$(RMRF) $(OUTPUT_DIR)
