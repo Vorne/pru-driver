@@ -51,3 +51,7 @@ $(LIBRARY_OUTPUT_DIR)/$(INTERFACE_SUBDIR):
 clean:
 	@echo DELETE $(OUTPUT_DIR)
 	$(RMRF) $(OUTPUT_DIR)
+
+.PHONY: cleanall
+cleanall: clean
+	rm -rf build
